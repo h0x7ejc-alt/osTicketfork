@@ -4101,8 +4101,31 @@ implements RestrictedAccess, Threadable, Searchable {
             }
         }
 
-        if ($vars['uid'])
+        $api_user = isset($vars['userId']) && $vars['userId'] !== '';
+        if ((!isset($vars['uid']) || !$vars['uid']) && $api_user)
+            $vars['uid'] = $vars['userId'];
+
+        if ((isset($vars['uid']) && $vars['uid']) || $api_user) {
             $user = User::lookup($vars['uid']);
+
+            if (!$user && !strcasecmp($origin, 'api')) {
+                $errors['errno'] = 400;
+                $errors['userId'] = __('Unknown or invalid userId');
+            }
+            elseif ($user && !strcasecmp($origin, 'api')) {
+                if (isset($vars['email']) && $vars['email']
+                        && !User::lookup(array(
+                            'id' => $user->getId(),
+                            'emails__address' => $vars['email'],
+                        ))) {
+                    $errors['errno'] = 400;
+                    $errors['email'] = __('userId does not match the submitted email address');
+                }
+
+                $vars['email'] = $vars['email'] ?: $user->getDefaultEmailAddress();
+                $vars['name'] = $vars['name'] ?: $user->getName();
+            }
+        }
 
         $id=0;
         $fields=array();

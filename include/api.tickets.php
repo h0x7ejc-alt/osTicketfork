@@ -33,7 +33,6 @@ class TicketApiController extends ApiController {
         }
 
         # Ticket form fields
-        # TODO: Support userId for existing user
         if(($form = TicketForm::getInstance()))
             foreach ($form->getFields() as $field)
                 $supported[] = $field->get('name');
@@ -56,7 +55,7 @@ class TicketApiController extends ApiController {
             case 'json':
             case 'xml':
                 $supported = array_merge($supported, [
-                    'duedate', 'slaId', 'staffId'
+                    'duedate', 'slaId', 'staffId', 'userId'
                 ]);
                 break;
         }

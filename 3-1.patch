@@ -1,0 +1,59 @@
+diff --git a/include/api.tickets.php b/include/api.tickets.php
+index bb8f7e94..fdb9e247 100644
+--- a/include/api.tickets.php
++++ b/include/api.tickets.php
+@@ -33,7 +33,6 @@ class TicketApiController extends ApiController {
+         }
+ 
+         # Ticket form fields
+-        # TODO: Support userId for existing user
+         if(($form = TicketForm::getInstance()))
+             foreach ($form->getFields() as $field)
+                 $supported[] = $field->get('name');
+@@ -56,7 +55,7 @@ class TicketApiController extends ApiController {
+             case 'json':
+             case 'xml':
+                 $supported = array_merge($supported, [
+-                    'duedate', 'slaId', 'staffId'
++                    'duedate', 'slaId', 'staffId', 'userId'
+                 ]);
+                 break;
+         }
+diff --git a/include/class.ticket.php b/include/class.ticket.php
+index a8fef403..7d66b5ed 100644
+--- a/include/class.ticket.php
++++ b/include/class.ticket.php
+@@ -4101,9 +4101,32 @@ implements RestrictedAccess, Threadable, Searchable {
+             }
+         }
+ 
+-        if ($vars['uid'])
++        $api_user = isset($vars['userId']) && $vars['userId'] !== '';
++        if ((!isset($vars['uid']) || !$vars['uid']) && $api_user)
++            $vars['uid'] = $vars['userId'];
++
++        if ((isset($vars['uid']) && $vars['uid']) || $api_user) {
+             $user = User::lookup($vars['uid']);
+ 
++            if (!$user && !strcasecmp($origin, 'api')) {
++                $errors['errno'] = 400;
++                $errors['userId'] = __('Unknown or invalid userId');
++            }
++            elseif ($user && !strcasecmp($origin, 'api')) {
++                if (isset($vars['email']) && $vars['email']
++                        && !User::lookup(array(
++                            'id' => $user->getId(),
++                            'emails__address' => $vars['email'],
++                        ))) {
++                    $errors['errno'] = 400;
++                    $errors['email'] = __('userId does not match the submitted email address');
++                }
++
++                $vars['email'] = $vars['email'] ?: $user->getDefaultEmailAddress();
++                $vars['name'] = $vars['name'] ?: $user->getName();
++            }
++        }
++
+         $id=0;
+         $fields=array();
+         switch (strtolower($origin)) {
