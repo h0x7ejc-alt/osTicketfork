@@ -1,0 +1,76 @@
+diff --git a/include/staff/ticket-tasks.inc.php b/include/staff/ticket-tasks.inc.php
+index b6f4b65b..800d4e69 100644
+--- a/include/staff/ticket-tasks.inc.php
++++ b/include/staff/ticket-tasks.inc.php
+@@ -11,6 +11,14 @@ $tasks->filter(array(
+             'object_id' => $ticket->getId(),
+             'object_type' => 'T'));
+ 
++$filterStatus = $_REQUEST['status'] ? strtolower($_REQUEST['status']) : 'all';
++if (in_array($filterStatus, array('open', 'closed'))) {
++    $SQ = new Q(array('flags__hasbit' => TaskModel::ISOPEN));
++    if ($filterStatus == 'closed')
++        $SQ->negate();
++    $tasks->filter($SQ);
++}
++
+ $count = $tasks->count();
+ $pageNav = new Pagenate($count,1, 100000); //TODO: support ajax based pages
+ $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
+@@ -19,8 +27,17 @@ $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
+ <div id="tasks_content" style="display:block;">
+ <div class="pull-left">
+    <?php
+-    if ($count) {
++    if ($count || $filterStatus != 'all') {
+         echo '<strong>'.$showing.'</strong>';
++        echo '&nbsp;&nbsp;&nbsp;<span class="faded">|</span>&nbsp;&nbsp;&nbsp;';
++        echo sprintf('<a %s href="#tickets/%d/tasks?status=all" class="tasks-filter">%s</a>',
++            $filterStatus == 'all' ? 'style="font-weight:bold;"' : '', $ticket->getId(), __('All'));
++        echo '&nbsp;&nbsp;&nbsp;<span class="faded">|</span>&nbsp;&nbsp;&nbsp;';
++        echo sprintf('<a %s href="#tickets/%d/tasks?status=open" class="tasks-filter">%s</a>',
++            $filterStatus == 'open' ? 'style="font-weight:bold;"' : '', $ticket->getId(), __('Open'));
++        echo '&nbsp;&nbsp;&nbsp;<span class="faded">|</span>&nbsp;&nbsp;&nbsp;';
++        echo sprintf('<a %s href="#tickets/%d/tasks?status=closed" class="tasks-filter">%s</a>',
++            $filterStatus == 'closed' ? 'style="font-weight:bold;"' : '', $ticket->getId(), __('Closed'));
+     } else {
+         echo sprintf(__('%s does not have any tasks'), $ticket? __('This ticket') :
+                 __('System'));
+@@ -46,8 +63,8 @@ $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
+     if ($count)
+         Task::getAgentActions($thisstaff, array(
+                     'container' => '#tasks_content',
+-                    'callback_url' => sprintf('ajax.php/tickets/%d/tasks',
+-                        $ticket->getId()),
++                    'callback_url' => sprintf('ajax.php/tickets/%d/tasks?status=%s',
++                        $ticket->getId(), $filterStatus),
+                     'morelabel' => __('Options'),
+                     'status' => $taskStatus ? $taskStatus : '')
+                 );
+@@ -156,6 +173,14 @@ if ($count) { ?>
+ <script type="text/javascript">
+ $(function() {
+ 
++    $(document).off('click.tasks-filter');
++    $(document).on('click.tasks-filter', 'a.tasks-filter', function(e) {
++        e.preventDefault();
++        var url = 'ajax.php/'+$(this).attr('href').substr(1);
++        $.pjax({url: url, container: '#tasks_content', push: false});
++        return false;
++    });
++
+     $(document).off('click.taskv');
+     $(document).on('click.taskv', 'tbody.tasks a, a#reload-task', function(e) {
+         e.preventDefault();
+@@ -190,9 +215,9 @@ $(function() {
+             var tid = parseInt(xhr.responseText);
+             if (tid) {
+                 var url = 'ajax.php/tickets/'+<?php echo $ticket->getId();
+-                ?>+'/tasks';
++                ?>+'/tasks?status=<?php echo $filterStatus; ?>';
+                 var $container = $('div#task_content');
+-                $container.load(url+'/'+tid+'/view', function () {
++                $container.load('ajax.php/tickets/<?php echo $ticket->getId(); ?>/tasks/'+tid+'/view', function () {
+                     $('.tip_box').remove();
+                     $('div#tasks_content').hide();
+                     $.pjax({url: url, container: '#tasks_content', timeout: 30000, push: false});
