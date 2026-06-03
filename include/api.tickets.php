@@ -33,7 +33,6 @@ class TicketApiController extends ApiController {
         }
 
         # Ticket form fields
-        # TODO: Support userId for existing user
         if(($form = TicketForm::getInstance()))
             foreach ($form->getFields() as $field)
                 $supported[] = $field->get('name');
@@ -56,7 +55,7 @@ class TicketApiController extends ApiController {
             case 'json':
             case 'xml':
                 $supported = array_merge($supported, [
-                    'duedate', 'slaId', 'staffId'
+                    'duedate', 'slaId', 'staffId', 'userId'
                 ]);
                 break;
         }
@@ -73,6 +72,20 @@ class TicketApiController extends ApiController {
         //Call parent to Validate the structure
         if(!parent::validate($data, $format, $strict) && $strict)
             $this->exerr(400, __('Unexpected or invalid data received'));
+
+        if (isset($data['userId'])) {
+            if (!is_numeric($data['userId']) || $data['userId'] <= 0)
+                $this->exerr(400, __('Invalid userId: must be a positive integer'));
+
+            $user = User::lookup($data['userId']);
+            if (!$user)
+                $this->exerr(400, __('Invalid userId: user not found'));
+
+            if (isset($data['email']) && $data['email']) {
+                if (strcasecmp($user->getDefaultEmailAddress(), $data['email']) !== 0)
+                    $this->exerr(400, __('userId and email conflict: email does not match the user'));
+            }
+        }
 
         // Use the settings on the thread entry on the ticket details
         // form to validate the attachments in the email
@@ -143,6 +156,18 @@ class TicketApiController extends ApiController {
 
         // Assign default value to source if not defined, or defined as NULL
         $data['source'] ??= $source;
+
+        if (isset($data['userId']) && $data['userId']) {
+            $data['uid'] = $data['userId'];
+            if (!isset($data['email']) || !$data['email']) {
+                $user = User::lookup($data['userId']);
+                if ($user) {
+                    $data['email'] = $user->getDefaultEmailAddress();
+                    if (!isset($data['name']) || !$data['name'])
+                        $data['name'] = $user->getName()->getFull();
+                }
+            }
+        }
 
         // Create the ticket with the data (attempt to anyway)
         $errors = array();
