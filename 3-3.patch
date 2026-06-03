@@ -1,0 +1,43 @@
+diff --git a/include/api.tickets.php b/include/api.tickets.php
+index bb8f7e94..182e20bb 100644
+--- a/include/api.tickets.php
++++ b/include/api.tickets.php
+@@ -33,7 +33,6 @@ class TicketApiController extends ApiController {
+         }
+ 
+         # Ticket form fields
+-        # TODO: Support userId for existing user
+         if(($form = TicketForm::getInstance()))
+             foreach ($form->getFields() as $field)
+                 $supported[] = $field->get('name');
+@@ -56,7 +55,7 @@ class TicketApiController extends ApiController {
+             case 'json':
+             case 'xml':
+                 $supported = array_merge($supported, [
+-                    'duedate', 'slaId', 'staffId'
++                    'duedate', 'slaId', 'staffId', 'userId'
+                 ]);
+                 break;
+         }
+@@ -144,6 +143,21 @@ class TicketApiController extends ApiController {
+         // Assign default value to source if not defined, or defined as NULL
+         $data['source'] ??= $source;
+ 
++        // Handle userId - map to uid for Ticket::create() which already
++        // supports user lookup by uid
++        if (isset($data['userId'])) {
++            $userId = (int) $data['userId'];
++            if (!($user = User::lookup($userId)))
++                return $this->exerr(400, __('Invalid userId: user not found'));
++            if (isset($data['email'])) {
++                $userEmail = $user->getEmail();
++                if ($userEmail && strcasecmp($userEmail->email, $data['email']) !== 0)
++                    return $this->exerr(400, __('userId and email conflict: the specified user does not have the provided email address'));
++            }
++            $data['uid'] = $userId;
++            unset($data['userId']);
++        }
++
+         // Create the ticket with the data (attempt to anyway)
+         $errors = array();
+         if (($ticket = Ticket::create($data, $errors, $data['source'],
