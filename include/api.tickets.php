@@ -33,7 +33,7 @@ class TicketApiController extends ApiController {
         }
 
         # Ticket form fields
-        # TODO: Support userId for existing user
+        $supported[] = 'userId';
         if(($form = TicketForm::getInstance()))
             foreach ($form->getFields() as $field)
                 $supported[] = $field->get('name');
@@ -143,6 +143,21 @@ class TicketApiController extends ApiController {
 
         // Assign default value to source if not defined, or defined as NULL
         $data['source'] ??= $source;
+
+        if (isset($data['userId'])) {
+            if (!($user = User::lookup($data['userId']))) {
+                return $this->exerr(400, __('Invalid userId'));
+            }
+            $userEmail = $user->getDefaultEmail() ? $user->getDefaultEmail()->address : null;
+            if (isset($data['email']) && $userEmail && strcasecmp($userEmail, $data['email']) !== 0) {
+                return $this->exerr(400, __('userId and email do not match'));
+            }
+            $data['uid'] = $data['userId'];
+            if ($userEmail) {
+                $data['email'] = $userEmail;
+            }
+            $data['name'] = (string) $user->getName();
+        }
 
         // Create the ticket with the data (attempt to anyway)
         $errors = array();
