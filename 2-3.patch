@@ -1,0 +1,103 @@
+diff --git a/include/staff/ticket-tasks.inc.php b/include/staff/ticket-tasks.inc.php
+index b6f4b65b..072f9300 100644
+--- a/include/staff/ticket-tasks.inc.php
++++ b/include/staff/ticket-tasks.inc.php
+@@ -11,12 +11,20 @@ $tasks->filter(array(
+             'object_id' => $ticket->getId(),
+             'object_type' => 'T'));
+ 
++$status = isset($_REQUEST['status']) ? $_REQUEST['status'] : '';
++if ($status) {
++    $SQ = new Q(array('flags__hasbit' => TaskModel::ISOPEN));
++    if (!strcasecmp($status, 'closed'))
++        $SQ->negate();
++    $tasks->filter(array($SQ));
++}
++
+ $count = $tasks->count();
+ $pageNav = new Pagenate($count,1, 100000); //TODO: support ajax based pages
+ $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
+ 
+ ?>
+-<div id="tasks_content" style="display:block;">
++<div id="tasks_content" style="display:block;" data-status="<?php echo $status; ?>">
+ <div class="pull-left">
+    <?php
+     if ($count) {
+@@ -27,6 +35,19 @@ $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
+     }
+    ?>
+ </div>
++<div class="pull-left" style="margin-left:15px;">
++    <span class="task-filter">
++        <a href="#tickets/<?php echo $ticket->getId(); ?>/tasks"
++            class="task-filter-link <?php echo !$status ? 'active' : ''; ?>"
++            data-status=""><?php echo __('All'); ?></a> |
++        <a href="#tickets/<?php echo $ticket->getId(); ?>/tasks"
++            class="task-filter-link <?php echo $status=='open' ? 'active' : ''; ?>"
++            data-status="open"><?php echo __('Open'); ?></a> |
++        <a href="#tickets/<?php echo $ticket->getId(); ?>/tasks"
++            class="task-filter-link <?php echo $status=='closed' ? 'active' : ''; ?>"
++            data-status="closed"><?php echo __('Closed'); ?></a>
++    </span>
++</div>
+ <div class="pull-right">
+     <?php
+     if ($role && $role->hasPerm(Task::PERM_CREATE)) { ?>
+@@ -46,8 +67,9 @@ $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
+     if ($count)
+         Task::getAgentActions($thisstaff, array(
+                     'container' => '#tasks_content',
+-                    'callback_url' => sprintf('ajax.php/tickets/%d/tasks',
+-                        $ticket->getId()),
++                    'callback_url' => sprintf('ajax.php/tickets/%d/tasks%s',
++                        $ticket->getId(),
++                        $status ? '?status='.$status : ''),
+                     'morelabel' => __('Options'),
+                     'status' => $taskStatus ? $taskStatus : '')
+                 );
+@@ -162,6 +184,10 @@ $(function() {
+         e.stopImmediatePropagation();
+         if ($(this).attr('href').length > 1) {
+             var url = 'ajax.php/'+$(this).attr('href').substr(1);
++            if ($(this).is('a#reload-task')) {
++                var status = $('div#tasks_content').data('status') || '';
++                if (status) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'status=' + status;
++            }
+             var $container = $('div#task_content');
+             var $stop = $('ul#ticket_tabs').offset().top;
+             $.pjax({url: url, container: 'div#task_content', push: false, scrollTo: $stop})
+@@ -177,6 +203,17 @@ $(function() {
+ 
+         return false;
+      });
++
++    $(document).off('click.task-filter');
++    $(document).on('click.task-filter', 'a.task-filter-link', function(e) {
++        e.preventDefault();
++        var status = $(this).data('status') || '';
++        var url = 'ajax.php/tickets/'+<?php echo $ticket->getId(); ?>+'/tasks';
++        if (status) url += '?status=' + status;
++        $.pjax({url: url, container: '#tasks_content', timeout: 30000, push: false});
++        return false;
++    });
++
+     // Ticket Tasks
+     $(document).off('.ticket-task-action');
+     $(document).on('click.ticket-task-action', 'a.ticket-task-action', function(e) {
+@@ -189,10 +226,13 @@ $(function() {
+         $.dialog(url, [201], function (xhr) {
+             var tid = parseInt(xhr.responseText);
+             if (tid) {
+-                var url = 'ajax.php/tickets/'+<?php echo $ticket->getId();
++                var baseUrl = 'ajax.php/tickets/'+<?php echo $ticket->getId();
+                 ?>+'/tasks';
++                var statusParam = $('div#tasks_content').data('status') || '';
++                var url = baseUrl;
++                if (statusParam) url += '?status=' + statusParam;
+                 var $container = $('div#task_content');
+-                $container.load(url+'/'+tid+'/view', function () {
++                $container.load(baseUrl+'/'+tid+'/view', function () {
+                     $('.tip_box').remove();
+                     $('div#tasks_content').hide();
+                     $.pjax({url: url, container: '#tasks_content', timeout: 30000, push: false});
