@@ -1,0 +1,110 @@
+diff --git a/include/staff/ticket-tasks.inc.php b/include/staff/ticket-tasks.inc.php
+index b6f4b65b..2054be73 100644
+--- a/include/staff/ticket-tasks.inc.php
++++ b/include/staff/ticket-tasks.inc.php
+@@ -3,6 +3,11 @@ global $thisstaff;
+ 
+ $role = $ticket->getRole($thisstaff);
+ 
++$taskStatusFilter = isset($_REQUEST['task_status']) ? $_REQUEST['task_status'] : 'all';
++if (!in_array($taskStatusFilter, array('all', 'open', 'closed'))) {
++    $taskStatusFilter = 'all';
++}
++
+ $tasks = Task::objects()
+     ->select_related('dept', 'staff', 'team')
+     ->order_by('-created');
+@@ -11,13 +16,43 @@ $tasks->filter(array(
+             'object_id' => $ticket->getId(),
+             'object_type' => 'T'));
+ 
++if ($taskStatusFilter === 'open') {
++    $tasks->filter(array('status__state' => 'open'));
++} elseif ($taskStatusFilter === 'closed') {
++    $tasks->filter(array('status__state' => 'closed'));
++}
++
+ $count = $tasks->count();
+ $pageNav = new Pagenate($count,1, 100000); //TODO: support ajax based pages
+ $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
+ 
++$callback_url = sprintf('ajax.php/tickets/%d/tasks?task_status=%s',
++    $ticket->getId(), $taskStatusFilter);
+ ?>
+ <div id="tasks_content" style="display:block;">
+ <div class="pull-left">
++   <?php
++    $filter_links = array();
++    $filter_labels = array(
++        'all' => __('All'),
++        'open' => __('Open'),
++        'closed' => __('Closed'),
++    );
++    foreach ($filter_labels as $f => $label) {
++        $qs = array('task_status' => $f);
++        $active = ($taskStatusFilter === $f) ? 'active' : '';
++        $filter_links[] = sprintf(
++            '<a href="#tickets/%d/tasks?%s" class="button %s task-status-filter" data-status="%s">%s</a>',
++            $ticket->getId(),
++            http_build_query($qs),
++            $active,
++            $f,
++            $label
++        );
++    }
++    echo implode(' ', $filter_links);
++    ?>
++    &nbsp;&nbsp;
+    <?php
+     if ($count) {
+         echo '<strong>'.$showing.'</strong>';
+@@ -40,16 +75,17 @@ $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
+             print __('Add New Task'); ?></a>
+     <?php
+     }
+-    foreach ($tasks as $task)
+-        $taskStatus .= $task->isOpen() ? 'open' : 'closed';
++    $allTasks = Task::objects()
++        ->filter(array('object_id' => $ticket->getId(), 'object_type' => 'T'));
++    foreach ($allTasks as $task)
++        $batchTaskStatus .= $task->isOpen() ? 'open' : 'closed';
+ 
+     if ($count)
+         Task::getAgentActions($thisstaff, array(
+                     'container' => '#tasks_content',
+-                    'callback_url' => sprintf('ajax.php/tickets/%d/tasks',
+-                        $ticket->getId()),
++                    'callback_url' => $callback_url,
+                     'morelabel' => __('Options'),
+-                    'status' => $taskStatus ? $taskStatus : '')
++                    'status' => $batchTaskStatus ? $batchTaskStatus : '')
+                 );
+     ?>
+ </div>
+@@ -155,6 +191,17 @@ if ($count) { ?>
+ </div>
+ <script type="text/javascript">
+ $(function() {
++    var currentFilter = '<?php echo $taskStatusFilter; ?>';
++
++    $(document).off('click.task-status-filter');
++    $(document).on('click.task-status-filter', 'a.task-status-filter', function(e) {
++        e.preventDefault();
++        var status = $(this).data('status');
++        currentFilter = status;
++        var url = 'ajax.php/tickets/<?php echo $ticket->getId(); ?>/tasks?task_status=' + status;
++        $.pjax({url: url, container: '#tasks_content', push: false, timeout: 30000});
++        return false;
++    });
+ 
+     $(document).off('click.taskv');
+     $(document).on('click.taskv', 'tbody.tasks a, a#reload-task', function(e) {
+@@ -195,7 +242,7 @@ $(function() {
+                 $container.load(url+'/'+tid+'/view', function () {
+                     $('.tip_box').remove();
+                     $('div#tasks_content').hide();
+-                    $.pjax({url: url, container: '#tasks_content', timeout: 30000, push: false});
++                    $.pjax({url: url+'?task_status='+currentFilter, container: '#tasks_content', timeout: 30000, push: false});
+                 }).show();
+             } else {
+                 window.location.href = $redirect ? $redirect : window.location.href;
