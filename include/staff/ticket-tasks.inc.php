@@ -3,6 +3,9 @@ global $thisstaff;
 
 $role = $ticket->getRole($thisstaff);
 
+// 获取筛选状态
+$status = isset($_REQUEST['task_status']) ? $_REQUEST['task_status'] : 'all';
+
 $tasks = Task::objects()
     ->select_related('dept', 'staff', 'team')
     ->order_by('-created');
@@ -11,14 +14,44 @@ $tasks->filter(array(
             'object_id' => $ticket->getId(),
             'object_type' => 'T'));
 
+// 应用状态筛选
+if ($status && $status !== 'all') {
+    $SQ = new Q(array('flags__hasbit' => TaskModel::ISOPEN));
+    if (!strcasecmp($status, 'closed'))
+        $SQ->negate();
+    $tasks->filter($SQ);
+}
+
 $count = $tasks->count();
 $pageNav = new Pagenate($count,1, 100000); //TODO: support ajax based pages
 $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
 
 ?>
-<div id="tasks_content" style="display:block;">
+<div id="tasks_content" style="display:block;" data-task-status="<?php echo $status; ?>">
 <div class="pull-left">
-   <?php
+    <?php
+    // 状态筛选标签
+    $statuses = array(
+        'all' => __('All'),
+        'open' => __('Open'),
+        'closed' => __('Closed'),
+    );
+    ?>
+    <div class="status-filter" style="display: inline-block; margin-right: 15px;">
+        <?php
+        foreach ($statuses as $s => $label) {
+            $selected = ($status === $s) ? ' style="font-weight: bold; color: #2196F3;"' : '';
+            echo sprintf(
+                '<a href="#" class="task-status-filter" data-status="%s"%s>%s</a>%s',
+                $s,
+                $selected,
+                $label,
+                ($s !== 'closed') ? ' | ' : ''
+            );
+        }
+        ?>
+    </div>
+    <?php
     if ($count) {
         echo '<strong>'.$showing.'</strong>';
     } else {
@@ -35,7 +68,8 @@ $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
         data-url="tickets.php?id=<?php echo $ticket->getId(); ?>#tasks"
         data-dialog-config='{"size":"large"}'
         href="#tickets/<?php
-            echo $ticket->getId(); ?>/add-task">
+            echo $ticket->getId(); ?>/add-task"
+        data-task-status="<?php echo $status; ?>">
             <i class="icon-plus-sign"></i> <?php
             print __('Add New Task'); ?></a>
     <?php
@@ -46,8 +80,8 @@ $showing = $pageNav->showing().' '._N('task', 'tasks', $count);
     if ($count)
         Task::getAgentActions($thisstaff, array(
                     'container' => '#tasks_content',
-                    'callback_url' => sprintf('ajax.php/tickets/%d/tasks',
-                        $ticket->getId()),
+                    'callback_url' => sprintf('ajax.php/tickets/%d/tasks?task_status=%s',
+                        $ticket->getId(), urlencode($status)),
                     'morelabel' => __('Options'),
                     'status' => $taskStatus ? $taskStatus : '')
                 );
@@ -155,6 +189,25 @@ if ($count) { ?>
 </div>
 <script type="text/javascript">
 $(function() {
+    // 存储当前筛选状态
+    var currentTaskStatus = '<?php echo $status; ?>';
+
+    // 状态筛选点击事件
+    $(document).off('click.task-status-filter');
+    $(document).on('click.task-status-filter', 'a.task-status-filter', function(e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        var status = $(this).data('status');
+        currentTaskStatus = status;
+        // 刷新任务列表，带上筛选参数
+        $.pjax({
+            url: 'ajax.php/tickets/<?php echo $ticket->getId(); ?>/tasks?task_status=' + encodeURIComponent(status),
+            container: '#tasks_content',
+            timeout: 30000,
+            push: false
+        });
+        return false;
+    });
 
     $(document).off('click.taskv');
     $(document).on('click.taskv', 'tbody.tasks a, a#reload-task', function(e) {
@@ -164,7 +217,7 @@ $(function() {
             var url = 'ajax.php/'+$(this).attr('href').substr(1);
             var $container = $('div#task_content');
             var $stop = $('ul#ticket_tabs').offset().top;
-            $.pjax({url: url, container: 'div#task_content', push: false, scrollTo: $stop})
+            $.pjax({url: url, container:'div#task_content', push: false, scrollTo: $stop})
             .done(
                 function() {
                 $container.show();
@@ -189,8 +242,7 @@ $(function() {
         $.dialog(url, [201], function (xhr) {
             var tid = parseInt(xhr.responseText);
             if (tid) {
-                var url = 'ajax.php/tickets/'+<?php echo $ticket->getId();
-                ?>+'/tasks';
+                var url = 'ajax.php/tickets/<?php echo $ticket->getId(); ?>/tasks?task_status=' + encodeURIComponent(currentTaskStatus);
                 var $container = $('div#task_content');
                 $container.load(url+'/'+tid+'/view', function () {
                     $('.tip_box').remove();

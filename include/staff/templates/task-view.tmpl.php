@@ -720,8 +720,18 @@ $(function() {
     $(document).off('.tasks-content');
     $(document).on('click.tasks-content', '#all-ticket-tasks', function(e) {
         e.preventDefault();
-        $('div#task_content').hide().empty();
-        $('div#tasks_content').show();
+        // 从 tasks_content 中获取当前筛选状态，如果没有则使用 'all'
+        var taskStatus = $('div#tasks_content').data('task-status') || 'all';
+        // 重新加载任务列表，带上筛选参数
+        $.pjax({
+            url: 'ajax.php/tickets/<?php echo $ticket->getId(); ?>/tasks?task_status=' + encodeURIComponent(taskStatus),
+            container: '#tasks_content',
+            timeout: 30000,
+            push: false
+        }).done(function() {
+            $('div#task_content').hide().empty();
+            $('div#tasks_content').show();
+        });
         return false;
      });
 
