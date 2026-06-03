@@ -10,7 +10,7 @@ class TicketApiController extends ApiController {
     # so that all supported input formats should be supported
     function getRequestStructure($format, $data=null) {
         $supported = array(
-            "alert", "autorespond", "source", "topicId",
+            "alert", "autorespond", "source", "topicId", "userId",
             "attachments" => array("*" =>
                 array("name", "type", "data", "encoding", "size")
             ),
@@ -143,6 +143,20 @@ class TicketApiController extends ApiController {
 
         // Assign default value to source if not defined, or defined as NULL
         $data['source'] ??= $source;
+
+        // Check for userId and email conflict
+        if (isset($data['userId']) && isset($data['email'])) {
+            if ($user = User::lookup($data['userId'])) {
+                if ($user->getDefaultEmailAddress() != $data['email']) {
+                    return $this->exerr(400, __('userId and email conflict - userId does not match the provided email'));
+                }
+            }
+        }
+
+        // Map userId to uid for Ticket::create
+        if (isset($data['userId'])) {
+            $data['uid'] = $data['userId'];
+        }
 
         // Create the ticket with the data (attempt to anyway)
         $errors = array();

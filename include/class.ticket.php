@@ -4104,6 +4104,15 @@ implements RestrictedAccess, Threadable, Searchable {
         if ($vars['uid'])
             $user = User::lookup($vars['uid']);
 
+        // Check for uid and email conflict
+        if ($user && isset($vars['email'])) {
+            if ($user->getDefaultEmailAddress() != $vars['email']) {
+                $errors['uid'] = __('uid and email conflict - uid does not match the provided email');
+                $errors['err'] = __('Invalid data');
+                return 0;
+            }
+        }
+
         $id=0;
         $fields=array();
         switch (strtolower($origin)) {

@@ -1,0 +1,54 @@
+diff --git a/include/api.tickets.php b/include/api.tickets.php
+index bb8f7e94..f8164f26 100644
+--- a/include/api.tickets.php
++++ b/include/api.tickets.php
+@@ -10,7 +10,7 @@ class TicketApiController extends ApiController {
+     # so that all supported input formats should be supported
+     function getRequestStructure($format, $data=null) {
+         $supported = array(
+-            "alert", "autorespond", "source", "topicId",
++            "alert", "autorespond", "source", "topicId", "userId",
+             "attachments" => array("*" =>
+                 array("name", "type", "data", "encoding", "size")
+             ),
+@@ -144,6 +144,20 @@ class TicketApiController extends ApiController {
+         // Assign default value to source if not defined, or defined as NULL
+         $data['source'] ??= $source;
+ 
++        // Check for userId and email conflict
++        if (isset($data['userId']) && isset($data['email'])) {
++            if ($user = User::lookup($data['userId'])) {
++                if ($user->getDefaultEmailAddress() != $data['email']) {
++                    return $this->exerr(400, __('userId and email conflict - userId does not match the provided email'));
++                }
++            }
++        }
++
++        // Map userId to uid for Ticket::create
++        if (isset($data['userId'])) {
++            $data['uid'] = $data['userId'];
++        }
++
+         // Create the ticket with the data (attempt to anyway)
+         $errors = array();
+         if (($ticket = Ticket::create($data, $errors, $data['source'],
+diff --git a/include/class.ticket.php b/include/class.ticket.php
+index a8fef403..44464450 100644
+--- a/include/class.ticket.php
++++ b/include/class.ticket.php
+@@ -4104,6 +4104,15 @@ implements RestrictedAccess, Threadable, Searchable {
+         if ($vars['uid'])
+             $user = User::lookup($vars['uid']);
+ 
++        // Check for uid and email conflict
++        if ($user && isset($vars['email'])) {
++            if ($user->getDefaultEmailAddress() != $vars['email']) {
++                $errors['uid'] = __('uid and email conflict - uid does not match the provided email');
++                $errors['err'] = __('Invalid data');
++                return 0;
++            }
++        }
++
+         $id=0;
+         $fields=array();
+         switch (strtolower($origin)) {
