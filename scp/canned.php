@@ -44,9 +44,11 @@ if ($canned && !$canned->staffCanAccess($thisstaff)) {
 
 $canned_form = new SimpleForm(array(
     'attachments' => new FileUploadField(array('id'=>'attach',
-        'configuration'=>array('extensions'=>false,
-            'size'=>$cfg->getMaxFileSize())
-   )),
+        'configuration'=>array(
+            'mimetypes' => array_keys(FileUploadField::getFileTypes()),
+            'size'=>$cfg->getMaxFileSize()
+        )
+    )),
 ));
 
 // Set fields' attachments so exsting files stay put
@@ -57,11 +59,14 @@ if ($canned
 }
 
 if ($_POST) {
+    // 验证表单字段，包括附件
+    $isValid = $canned_form->isValid();
+    
     switch(strtolower($_POST['do'])) {
         case 'update':
             if(!$canned) {
                 $errors['err']=sprintf(__('%s: Unknown or invalid'), __('canned response'));
-            } elseif($canned->update($_POST, $errors)) {
+            } elseif($isValid && $canned->update($_POST, $errors)) {
                 $msg=sprintf(__('Successfully updated %s.'),
                     __('this canned response'));
 
@@ -70,7 +75,6 @@ if ($_POST) {
 
                 //Delete removed attachments.
                 //XXX: files[] shouldn't be changed under any circumstances.
-                // Upload NEW attachments IF ANY - TODO: validate attachment types??
                 $keepers = $canned_form->getField('attachments')->getClean();
                 $canned->attachments->keepOnlyFileIds($keepers, false);
 
@@ -87,14 +91,20 @@ if ($_POST) {
                 // Delete drafts for all users for this canned response
                 Draft::deleteForNamespace('canned.'.$canned->getId());
             } elseif(!$errors['err']) {
-                $errors['err'] = sprintf('%s %s',
-                    sprintf(__('Unable to update %s.'), __('this canned response')),
-                    __('Correct any errors below and try again.'));
+                if (!$isValid) {
+                    $errors['err'] = sprintf('%s %s',
+                        __('Invalid file attachment.'),
+                        __('Correct any errors below and try again.'));
+                } else {
+                    $errors['err'] = sprintf('%s %s',
+                        sprintf(__('Unable to update %s.'), __('this canned response')),
+                        __('Correct any errors below and try again.'));
+                }
             }
             break;
         case 'create':
             $premade = Canned::create();
-            if ($premade->update($_POST,$errors)) {
+            if ($isValid && $premade->update($_POST,$errors)) {
                 $msg=sprintf(__('Successfully added %s.'), Format::htmlchars($_POST['title']));
                 $type = array('type' => 'created');
                 Signal::send('object.created', $premade, $type);
@@ -111,9 +121,15 @@ if ($_POST) {
                 // Delete this user's drafts for new canned-responses
                 Draft::deleteForNamespace('canned', $thisstaff->getId());
             } elseif(!$errors['err']) {
-                $errors['err']=sprintf('%s %s',
-                    sprintf(__('Unable to add %s.'), __('this canned response')),
-                    __('Correct any errors below and try again.'));
+                if (!$isValid) {
+                    $errors['err'] = sprintf('%s %s',
+                        __('Invalid file attachment.'),
+                        __('Correct any errors below and try again.'));
+                } else {
+                    $errors['err']=sprintf('%s %s',
+                        sprintf(__('Unable to add %s.'), __('this canned response')),
+                        __('Correct any errors below and try again.'));
+                }
             }
             break;
         case 'mass_process':
