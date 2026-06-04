@@ -1,0 +1,62 @@
+diff --git a/scp/canned.php b/scp/canned.php
+index 20398104..583765ef 100644
+--- a/scp/canned.php
++++ b/scp/canned.php
+@@ -32,8 +32,6 @@ if(!$thisstaff
+     exit;
+ }
+ 
+-//TODO: Support attachments!
+-
+ $canned=null;
+ if($_REQUEST['id'] && !($canned=Canned::lookup($_REQUEST['id'])))
+     $errors['err']=sprintf(__('%s: Unknown or invalid ID.'), __('Canned Response'));
+@@ -57,6 +55,14 @@ if ($canned
+ }
+ 
+ if ($_POST) {
++    $syncAttachments = function($canned) use ($canned_form) {
++        // Synchronize regular and inline attachments
++        $keepers = $canned_form->getField('attachments')->getClean();
++        $canned->attachments->keepOnlyFileIds($keepers, false);
++        $images = Draft::getAttachmentIds($_POST['response']);
++        $canned->attachments->keepOnlyFileIds($images, true);
++    };
++
+     switch(strtolower($_POST['do'])) {
+         case 'update':
+             if(!$canned) {
+@@ -68,15 +74,7 @@ if ($_POST) {
+                 $type = array('type' => 'edited');
+                 Signal::send('object.edited', $canned, $type);
+ 
+-                //Delete removed attachments.
+-                //XXX: files[] shouldn't be changed under any circumstances.
+-                // Upload NEW attachments IF ANY - TODO: validate attachment types??
+-                $keepers = $canned_form->getField('attachments')->getClean();
+-                $canned->attachments->keepOnlyFileIds($keepers, false);
+-
+-                // Attach inline attachments from the editor
+-                $images = Draft::getAttachmentIds($_POST['response']);
+-                $canned->attachments->keepOnlyFileIds($images, true);
++                $syncAttachments($canned);
+ 
+                 // XXX: Handle nicely notifying a user that the draft was
+                 // deleted | OR | show the draft for the user on the name
+@@ -99,14 +97,8 @@ if ($_POST) {
+                 $type = array('type' => 'created');
+                 Signal::send('object.created', $premade, $type);
+                 $_REQUEST['a']=null;
+-                //Upload attachments
+-                $keepers = $canned_form->getField('attachments')->getClean();
+-                if ($keepers)
+-                    $premade->attachments->upload($keepers);
+-
+-                // Attach inline attachments from the editor
+-                $premade->attachments->upload(
+-                    Draft::getAttachmentIds($_POST['response']), true);
++                
++                $syncAttachments($premade);
+ 
+                 // Delete this user's drafts for new canned-responses
+                 Draft::deleteForNamespace('canned', $thisstaff->getId());
