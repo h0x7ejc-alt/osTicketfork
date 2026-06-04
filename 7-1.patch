@@ -1,0 +1,191 @@
+diff --git a/scp/canned.php b/scp/canned.php
+index 20398104..3eba83ee 100644
+--- a/scp/canned.php
++++ b/scp/canned.php
+@@ -16,6 +16,61 @@
+ require('staff.inc.php');
+ include_once(INCLUDE_DIR.'class.canned.php');
+ 
++function canned_attachment_ids($canned) {
++    $ids = array();
++
++    if ($canned && $canned->attachments) {
++        foreach ($canned->attachments as $attachment) {
++            if (!$attachment->inline)
++                $ids[$attachment->file_id] = true;
++        }
++    }
++
++    return $ids;
++}
++
++function validate_canned_attachments($field, &$error, $existing=array()) {
++    $error = null;
++    $errors = array();
++    $existing = array_fill_keys(array_keys($existing ?: array()), true);
++    $config = $field->getConfiguration();
++    $form_name = $field->getFormName();
++
++    if ($form_name && isset($_FILES[$form_name])) {
++        foreach (AttachmentFile::format($_FILES[$form_name]) ?: array() as $file) {
++            if (!FileUploadField::isValidFile($file, $config['strictmimecheck'])) {
++                $errors[] = sprintf('%s: %s',
++                    Format::htmlchars($file['name']), __('Invalid File'));
++            } elseif (!$field->isValidFileType($file['name'], $file['type'])) {
++                $errors[] = sprintf('%s: %s',
++                    Format::htmlchars($file['name']), __('File type is not allowed'));
++            }
++        }
++    }
++
++    $keepers = $field->getClean();
++    $pending = array_diff_key($keepers ?: array(), $existing);
++
++    if ($pending) {
++        foreach (AttachmentFile::objects()->filter(array(
++            'id__in' => array_keys($pending)
++        )) as $file) {
++            if (!$field->isValidFileType($file->getName(), $file->getType())) {
++                $errors[] = sprintf('%s: %s',
++                    Format::htmlchars($pending[$file->getId()] ?: $file->getName()),
++                    __('File type is not allowed'));
++            }
++        }
++    }
++
++    if ($errors) {
++        $error = implode('<br />', array_unique($errors));
++        return false;
++    }
++
++    return $keepers;
++}
++
+ if ($thisstaff && $roles = $thisstaff->getRoles()) {
+     $cannedManage = array();
+     foreach ($roles as $r) {
+@@ -32,8 +87,6 @@ if(!$thisstaff
+     exit;
+ }
+ 
+-//TODO: Support attachments!
+-
+ $canned=null;
+ if($_REQUEST['id'] && !($canned=Canned::lookup($_REQUEST['id'])))
+     $errors['err']=sprintf(__('%s: Unknown or invalid ID.'), __('Canned Response'));
+@@ -44,12 +97,12 @@ if ($canned && !$canned->staffCanAccess($thisstaff)) {
+ 
+ $canned_form = new SimpleForm(array(
+     'attachments' => new FileUploadField(array('id'=>'attach',
+-        'configuration'=>array('extensions'=>false,
++        'configuration'=>array(
++            'extensions'=>$cfg->getAllowedFileTypes() ?: false,
+             'size'=>$cfg->getMaxFileSize())
+    )),
+ ));
+ 
+-// Set fields' attachments so exsting files stay put
+ if ($canned
+     && $canned->attachments
+     && ($attachments = $canned_form->getField('attachments'))) {
+@@ -61,59 +114,56 @@ if ($_POST) {
+         case 'update':
+             if(!$canned) {
+                 $errors['err']=sprintf(__('%s: Unknown or invalid'), __('canned response'));
+-            } elseif($canned->update($_POST, $errors)) {
+-                $msg=sprintf(__('Successfully updated %s.'),
+-                    __('this canned response'));
+-
+-                $type = array('type' => 'edited');
+-                Signal::send('object.edited', $canned, $type);
+-
+-                //Delete removed attachments.
+-                //XXX: files[] shouldn't be changed under any circumstances.
+-                // Upload NEW attachments IF ANY - TODO: validate attachment types??
+-                $keepers = $canned_form->getField('attachments')->getClean();
+-                $canned->attachments->keepOnlyFileIds($keepers, false);
+-
+-                // Attach inline attachments from the editor
+-                $images = Draft::getAttachmentIds($_POST['response']);
+-                $canned->attachments->keepOnlyFileIds($images, true);
+-
+-                // XXX: Handle nicely notifying a user that the draft was
+-                // deleted | OR | show the draft for the user on the name
+-                // page refresh or a nice bar popup immediately with
+-                // something like "This page is out-of-date", and allow the
+-                // user to voluntarily delete their draft
+-                //
+-                // Delete drafts for all users for this canned response
+-                Draft::deleteForNamespace('canned.'.$canned->getId());
+-            } elseif(!$errors['err']) {
+-                $errors['err'] = sprintf('%s %s',
+-                    sprintf(__('Unable to update %s.'), __('this canned response')),
+-                    __('Correct any errors below and try again.'));
++            } else {
++                $keepers = validate_canned_attachments(
++                    $canned_form->getField('attachments'),
++                    $errors['files'],
++                    canned_attachment_ids($canned)
++                );
++                if ($keepers !== false && $canned->update($_POST, $errors)) {
++                    $msg=sprintf(__('Successfully updated %s.'),
++                        __('this canned response'));
++
++                    $type = array('type' => 'edited');
++                    Signal::send('object.edited', $canned, $type);
++
++                    $canned->attachments->keepOnlyFileIds($keepers, false);
++
++                    $images = Draft::getAttachmentIds($_POST['response']);
++                    $canned->attachments->keepOnlyFileIds($images, true);
++
++                    Draft::deleteForNamespace('canned.'.$canned->getId());
++                } elseif(!$errors['err']) {
++                    $errors['err'] = $errors['files']
++                        ?: sprintf('%s %s',
++                            sprintf(__('Unable to update %s.'), __('this canned response')),
++                            __('Correct any errors below and try again.'));
++                }
+             }
+             break;
+         case 'create':
+             $premade = Canned::create();
+-            if ($premade->update($_POST,$errors)) {
++            $keepers = validate_canned_attachments(
++                $canned_form->getField('attachments'),
++                $errors['files']
++            );
++            if ($keepers !== false && $premade->update($_POST,$errors)) {
+                 $msg=sprintf(__('Successfully added %s.'), Format::htmlchars($_POST['title']));
+                 $type = array('type' => 'created');
+                 Signal::send('object.created', $premade, $type);
+                 $_REQUEST['a']=null;
+-                //Upload attachments
+-                $keepers = $canned_form->getField('attachments')->getClean();
+                 if ($keepers)
+                     $premade->attachments->upload($keepers);
+ 
+-                // Attach inline attachments from the editor
+                 $premade->attachments->upload(
+                     Draft::getAttachmentIds($_POST['response']), true);
+ 
+-                // Delete this user's drafts for new canned-responses
+                 Draft::deleteForNamespace('canned', $thisstaff->getId());
+             } elseif(!$errors['err']) {
+-                $errors['err']=sprintf('%s %s',
+-                    sprintf(__('Unable to add %s.'), __('this canned response')),
+-                    __('Correct any errors below and try again.'));
++                $errors['err'] = $errors['files']
++                    ?: sprintf('%s %s',
++                        sprintf(__('Unable to add %s.'), __('this canned response')),
++                        __('Correct any errors below and try again.'));
+             }
+             break;
+         case 'mass_process':
+@@ -194,4 +244,4 @@ require(STAFFINC_DIR.'header.inc.php');
+ require(STAFFINC_DIR.$page);
+ print $canned_form->getMedia();
+ include(STAFFINC_DIR.'footer.inc.php');
+-?>
++?>
+\ No newline at end of file
