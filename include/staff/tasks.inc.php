@@ -455,6 +455,13 @@ if ($thisstaff->hasPerm(Task::PERM_DELETE, false)) {
                         'a' => 'export', 'h' => $hash,
                         'status' => $_REQUEST['status'])),
                 __('Export'));
+        echo '&nbsp;|&nbsp;';
+        echo sprintf('<a class="export-csv no-pjax" href="?%s">%s</a>',
+                Http::build_query(array(
+                        'a' => 'export', 'h' => $hash,
+                        'format' => 'json',
+                        'status' => $_REQUEST['status'])),
+                __('JSON Export'));
         echo '&nbsp;<i class="help-tip icon-question-sign" href="#export"></i></div>';
     } ?>
     </form>
