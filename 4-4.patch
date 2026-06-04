@@ -1,0 +1,69 @@
+diff --git a/include/cli/modules/diagnostic.php b/include/cli/modules/diagnostic.php
+new file mode 100644
+index 00000000..01500451
+--- /dev/null
++++ b/include/cli/modules/diagnostic.php
+@@ -0,0 +1,62 @@
++<?php
++
++class DiagnosticManager extends Module {
++    var $prologue = 'CLI diagnostic manager for osTicket';
++    var $arguments = array(
++        'action' => array(
++            'help' => 'Action to be performed',
++            'options' => array(
++                'mailbox' => 'Show mailbox fetch configuration summary',
++            ),
++        ),
++    );
++
++    function run($args, $options) {
++        Bootstrap::connect();
++        $ost = osTicket::start();
++
++        switch (strtolower($args['action'])) {
++            case 'mailbox':
++                $this->showMailboxConfig();
++                break;
++            default:
++                $this->stderr->write('Unknown action!');
++        }
++    }
++
++    private function showMailboxConfig() {
++        $mailboxes = MailBoxAccount::objects()
++            ->filter(['active' => 1])
++            ->order_by('id');
++
++        if (!$mailboxes->count()) {
++            $this->stdout->write("No active mailbox accounts found.\n");
++            return;
++        }
++
++        $this->stdout->write("Active Mailbox Fetch Configuration Summary\n");
++        $this->stdout->write(str_repeat('=', 80) . "\n\n");
++
++        foreach ($mailboxes as $mailbox) {
++            if (!$mailbox->isActive())
++                continue;
++
++            $email = $mailbox->getEmail();
++            $emailAddr = $email->getEmail();
++            $fetchFolder = $mailbox->getFetchFolder() ?: 'N/A';
++            $archiveFolder = $mailbox->getArchiveFolder() ?: 'N/A';
++            $maxFetch = $mailbox->getMaxFetch() ?: 'N/A';
++            $canDelete = $mailbox->canDeleteEmails() ? 'Yes' : 'No';
++
++            $this->stdout->write(sprintf("Email Address: %s\n", $emailAddr));
++            $this->stdout->write(sprintf("Fetch Folder:  %s\n", $fetchFolder));
++            $this->stdout->write(sprintf("Archive Folder: %s\n", $archiveFolder));
++            $this->stdout->write(sprintf("Max Fetch:     %s\n", $maxFetch));
++            $this->stdout->write(sprintf("Can Delete:    %s\n", $canDelete));
++            $this->stdout->write(str_repeat('-', 80) . "\n");
++        }
++    }
++}
++
++Module::register('diagnostic', 'DiagnosticManager');
++?>
+\ No newline at end of file
