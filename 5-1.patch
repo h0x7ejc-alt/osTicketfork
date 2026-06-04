@@ -1,0 +1,134 @@
+diff --git a/include/class.export.php b/include/class.export.php
+index 504f5867..36de5f1d 100644
+--- a/include/class.export.php
++++ b/include/class.export.php
+@@ -24,11 +24,27 @@ class Export {
+         'A3',
+     );
+ 
++    static function getQueryMimeType($how='csv') {
++        $how = strtolower($how);
++        $mimetypes = array(
++            'csv' => 'text/csv',
++            'json' => 'application/json',
++        );
++
++        return isset($mimetypes[$how])
++            ? $mimetypes[$how]
++            : "text/$how";
++    }
++
+     static function dumpQuery($sql, $headers, $how='csv', $options=array()) {
++        $how = strtolower($how);
+         $exporters = array(
+             'csv' => 'CsvResultsExporter',
+             'json' => 'JsonResultsExporter'
+         );
++        if (!isset($exporters[$how]))
++            $how = 'csv';
++
+         $exp = new $exporters[$how]($sql, $headers, $options);
+         return $exp->dump($options['tmp'] ? true : false);
+     }
+@@ -172,7 +188,7 @@ class Export {
+         $stuff = ob_get_contents();
+         ob_end_clean();
+         if ($stuff)
+-            Http::download($filename, "text/$how", $stuff);
++            Http::download($filename, self::getQueryMimeType($how), $stuff);
+ 
+         return false;
+     }
+@@ -693,10 +709,10 @@ class ResultSetExporter {
+         return $record;
+     }
+ 
+-    function nextArray() {
++    function nextArray($use_headers=false) {
+         if (!($row = $this->next()))
+             return false;
+-        return array_combine($this->keys, $row);
++        return array_combine($use_headers ? $this->headers : $this->keys, $row);
+     }
+ 
+     function dump() {
+@@ -741,13 +757,16 @@ class CsvResultsExporter extends ResultSetExporter {
+ }
+ 
+ class JsonResultsExporter extends ResultSetExporter {
+-    function dump() {
++    function dump($tmp=false) {
+         require_once(INCLUDE_DIR.'class.json.php');
+         $rows = array();
+-        while ($row=$this->nextArray()) {
++        while ($row=$this->nextArray(true)) {
+             $rows[] = $row;
+         }
+-        echo JsonDataEncoder::encode($rows);
++        fwrite($this->output, JsonDataEncoder::encode($rows));
++
++        if (!$tmp)
++            fclose($this->output);
+     }
+ }
+ 
+diff --git a/include/i18n/en_US/help/tips/tasks.queue.yaml b/include/i18n/en_US/help/tips/tasks.queue.yaml
+index 393447f0..2473ce1a 100644
+--- a/include/i18n/en_US/help/tips/tasks.queue.yaml
++++ b/include/i18n/en_US/help/tips/tasks.queue.yaml
+@@ -23,6 +23,6 @@ advanced:
+ export:
+     title: Export
+     content: >
+-        Export your data currently in view in a CSV file.
++        Export your data currently in view in a CSV or JSON file.
+         CSV files may be opened with any spreadsheet software
+         (i.e., Microsoft Excel, Apple Pages, OpenOffice, etc.).
+diff --git a/include/staff/tasks.inc.php b/include/staff/tasks.inc.php
+index 052b7055..ac868877 100644
+--- a/include/staff/tasks.inc.php
++++ b/include/staff/tasks.inc.php
+@@ -449,12 +449,17 @@ if ($thisstaff->hasPerm(Task::PERM_DELETE, false)) {
+     </table>
+     <?php
+     if ($total>0) { //if we actually had any tasks returned.
++        $export_url = array(
++                'a' => 'export', 'h' => $hash,
++                'status' => $_REQUEST['status']);
+         echo '<div>&nbsp;'.__('Page').':'.$pageNav->getPageLinks().'&nbsp;';
+-        echo sprintf('<a class="export-csv no-pjax" href="?%s">%s</a>',
+-                Http::build_query(array(
+-                        'a' => 'export', 'h' => $hash,
+-                        'status' => $_REQUEST['status'])),
+-                __('Export'));
++        echo sprintf('%s <a class="export-csv no-pjax" href="?%s">%s</a> | '
++                .'<a class="export-json no-pjax" href="?%s">%s</a>',
++                __('Export').':',
++                Http::build_query($export_url + array('format' => 'csv')),
++                'CSV',
++                Http::build_query($export_url + array('format' => 'json')),
++                'JSON');
+         echo '&nbsp;<i class="help-tip icon-question-sign" href="#export"></i></div>';
+     } ?>
+     </form>
+diff --git a/scp/tasks.php b/scp/tasks.php
+index 06c38cc5..6abd5e80 100644
+--- a/scp/tasks.php
++++ b/scp/tasks.php
+@@ -232,9 +232,15 @@ if($task) {
+         $inc = 'task-open.inc.php';
+     elseif($_REQUEST['a'] == 'export') {
+         $ts = date('Ymd');
++        $format = isset($_REQUEST['format'])
++            ? strtolower($_REQUEST['format'])
++            : 'csv';
++        if (!in_array($format, array('csv', 'json')))
++            $format = 'csv';
++
+         if (!($query=$_SESSION[':Q:tasks']))
+             $errors['err'] = __('Query token not found');
+-        elseif (!Export::saveTasks($query, "tasks-$ts.csv", 'csv'))
++        elseif (!Export::saveTasks($query, "tasks-$ts.$format", $format))
+             $errors['err'] = __('Unable to dump query results.')
+                 .' '.__('Internal error occurred');
+     }

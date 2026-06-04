@@ -449,12 +449,17 @@ if ($thisstaff->hasPerm(Task::PERM_DELETE, false)) {
     </table>
     <?php
     if ($total>0) { //if we actually had any tasks returned.
+        $export_url = array(
+                'a' => 'export', 'h' => $hash,
+                'status' => $_REQUEST['status']);
         echo '<div>&nbsp;'.__('Page').':'.$pageNav->getPageLinks().'&nbsp;';
-        echo sprintf('<a class="export-csv no-pjax" href="?%s">%s</a>',
-                Http::build_query(array(
-                        'a' => 'export', 'h' => $hash,
-                        'status' => $_REQUEST['status'])),
-                __('Export'));
+        echo sprintf('%s <a class="export-csv no-pjax" href="?%s">%s</a> | '
+                .'<a class="export-json no-pjax" href="?%s">%s</a>',
+                __('Export').':',
+                Http::build_query($export_url + array('format' => 'csv')),
+                'CSV',
+                Http::build_query($export_url + array('format' => 'json')),
+                'JSON');
         echo '&nbsp;<i class="help-tip icon-question-sign" href="#export"></i></div>';
     } ?>
     </form>

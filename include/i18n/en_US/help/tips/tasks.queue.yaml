@@ -23,6 +23,6 @@ advanced:
 export:
     title: Export
     content: >
-        Export your data currently in view in a CSV file.
+        Export your data currently in view in a CSV or JSON file.
         CSV files may be opened with any spreadsheet software
         (i.e., Microsoft Excel, Apple Pages, OpenOffice, etc.).

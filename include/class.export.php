@@ -24,11 +24,27 @@ class Export {
         'A3',
     );
 
+    static function getQueryMimeType($how='csv') {
+        $how = strtolower($how);
+        $mimetypes = array(
+            'csv' => 'text/csv',
+            'json' => 'application/json',
+        );
+
+        return isset($mimetypes[$how])
+            ? $mimetypes[$how]
+            : "text/$how";
+    }
+
     static function dumpQuery($sql, $headers, $how='csv', $options=array()) {
+        $how = strtolower($how);
         $exporters = array(
             'csv' => 'CsvResultsExporter',
             'json' => 'JsonResultsExporter'
         );
+        if (!isset($exporters[$how]))
+            $how = 'csv';
+
         $exp = new $exporters[$how]($sql, $headers, $options);
         return $exp->dump($options['tmp'] ? true : false);
     }
@@ -172,7 +188,7 @@ class Export {
         $stuff = ob_get_contents();
         ob_end_clean();
         if ($stuff)
-            Http::download($filename, "text/$how", $stuff);
+            Http::download($filename, self::getQueryMimeType($how), $stuff);
 
         return false;
     }
@@ -693,10 +709,10 @@ class ResultSetExporter {
         return $record;
     }
 
-    function nextArray() {
+    function nextArray($use_headers=false) {
         if (!($row = $this->next()))
             return false;
-        return array_combine($this->keys, $row);
+        return array_combine($use_headers ? $this->headers : $this->keys, $row);
     }
 
     function dump() {
@@ -741,13 +757,16 @@ class CsvResultsExporter extends ResultSetExporter {
 }
 
 class JsonResultsExporter extends ResultSetExporter {
-    function dump() {
+    function dump($tmp=false) {
         require_once(INCLUDE_DIR.'class.json.php');
         $rows = array();
-        while ($row=$this->nextArray()) {
+        while ($row=$this->nextArray(true)) {
             $rows[] = $row;
         }
-        echo JsonDataEncoder::encode($rows);
+        fwrite($this->output, JsonDataEncoder::encode($rows));
+
+        if (!$tmp)
+            fclose($this->output);
     }
 }
 
