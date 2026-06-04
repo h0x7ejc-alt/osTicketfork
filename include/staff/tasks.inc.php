@@ -453,8 +453,16 @@ if ($thisstaff->hasPerm(Task::PERM_DELETE, false)) {
         echo sprintf('<a class="export-csv no-pjax" href="?%s">%s</a>',
                 Http::build_query(array(
                         'a' => 'export', 'h' => $hash,
-                        'status' => $_REQUEST['status'])),
-                __('Export'));
+                        'status' => $_REQUEST['status'],
+                        'format' => 'csv')),
+                __('Export CSV'));
+        echo '&nbsp;|&nbsp;';
+        echo sprintf('<a class="export-json no-pjax" href="?%s">%s</a>',
+                Http::build_query(array(
+                        'a' => 'export', 'h' => $hash,
+                        'status' => $_REQUEST['status'],
+                        'format' => 'json')),
+                __('Export JSON'));
         echo '&nbsp;<i class="help-tip icon-question-sign" href="#export"></i></div>';
     } ?>
     </form>

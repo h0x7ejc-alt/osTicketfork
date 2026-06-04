@@ -232,9 +232,12 @@ if($task) {
         $inc = 'task-open.inc.php';
     elseif($_REQUEST['a'] == 'export') {
         $ts = date('Ymd');
+        $format = $_REQUEST['format'] ?? 'csv';
+        $format = in_array($format, ['csv', 'json']) ? $format : 'csv';
+        $ext = $format;
         if (!($query=$_SESSION[':Q:tasks']))
             $errors['err'] = __('Query token not found');
-        elseif (!Export::saveTasks($query, "tasks-$ts.csv", 'csv'))
+        elseif (!Export::saveTasks($query, "tasks-$ts.$ext", $format))
             $errors['err'] = __('Unable to dump query results.')
                 .' '.__('Internal error occurred');
     }
