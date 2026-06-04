@@ -1,0 +1,39 @@
+diff --git a/include/staff/tasks.inc.php b/include/staff/tasks.inc.php
+index 052b7055..bf5d4485 100644
+--- a/include/staff/tasks.inc.php
++++ b/include/staff/tasks.inc.php
+@@ -454,7 +454,14 @@ if ($thisstaff->hasPerm(Task::PERM_DELETE, false)) {
+                 Http::build_query(array(
+                         'a' => 'export', 'h' => $hash,
+                         'status' => $_REQUEST['status'])),
+-                __('Export'));
++                __('Export CSV'));
++        echo '&nbsp;';
++        echo sprintf('<a class="export-json no-pjax" href="?%s">%s</a>',
++                Http::build_query(array(
++                        'a' => 'export', 'h' => $hash,
++                        'status' => $_REQUEST['status'],
++                        'format' => 'json')),
++                __('Export JSON'));
+         echo '&nbsp;<i class="help-tip icon-question-sign" href="#export"></i></div>';
+     } ?>
+     </form>
+diff --git a/scp/tasks.php b/scp/tasks.php
+index 06c38cc5..ecea8c03 100644
+--- a/scp/tasks.php
++++ b/scp/tasks.php
+@@ -232,9 +232,13 @@ if($task) {
+         $inc = 'task-open.inc.php';
+     elseif($_REQUEST['a'] == 'export') {
+         $ts = date('Ymd');
++        $how = strtolower($_REQUEST['format'] ?: 'csv');
++        if (!in_array($how, array('csv', 'json')))
++            $how = 'csv';
++        $ext = ($how == 'json') ? 'json' : 'csv';
+         if (!($query=$_SESSION[':Q:tasks']))
+             $errors['err'] = __('Query token not found');
+-        elseif (!Export::saveTasks($query, "tasks-$ts.csv", 'csv'))
++        elseif (!Export::saveTasks($query, "tasks-$ts.$ext", $how))
+             $errors['err'] = __('Unable to dump query results.')
+                 .' '.__('Internal error occurred');
+     }
