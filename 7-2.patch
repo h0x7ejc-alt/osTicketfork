@@ -1,0 +1,40 @@
+diff --git a/scp/canned.php b/scp/canned.php
+index 20398104..8b15e3cb 100644
+--- a/scp/canned.php
++++ b/scp/canned.php
+@@ -44,7 +44,7 @@ if ($canned && !$canned->staffCanAccess($thisstaff)) {
+ 
+ $canned_form = new SimpleForm(array(
+     'attachments' => new FileUploadField(array('id'=>'attach',
+-        'configuration'=>array('extensions'=>false,
++        'configuration'=>array('extensions'=>$cfg->getAllowedFileTypes(),
+             'size'=>$cfg->getMaxFileSize())
+    )),
+ ));
+@@ -57,6 +57,17 @@ if ($canned
+ }
+ 
+ if ($_POST) {
++    // Validate manual attachments
++    if (isset($_FILES['attachments'])) {
++        $attachmentsField = $canned_form->getField('attachments');
++        foreach (AttachmentFile::format($_FILES['attachments']) as $file) {
++            if (!$attachmentsField->isValidFileType($file['name'], $file['type'])) {
++                $errors['files'] = __('Invalid file type for attachment');
++                break;
++            }
++        }
++    }
++
+     switch(strtolower($_POST['do'])) {
+         case 'update':
+             if(!$canned) {
+@@ -70,7 +81,7 @@ if ($_POST) {
+ 
+                 //Delete removed attachments.
+                 //XXX: files[] shouldn't be changed under any circumstances.
+-                // Upload NEW attachments IF ANY - TODO: validate attachment types??
++                // Upload NEW attachments IF ANY
+                 $keepers = $canned_form->getField('attachments')->getClean();
+                 $canned->attachments->keepOnlyFileIds($keepers, false);
+ 
