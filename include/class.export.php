@@ -171,8 +171,10 @@ class Export {
         self::dumpTasks($sql, $how);
         $stuff = ob_get_contents();
         ob_end_clean();
-        if ($stuff)
-            Http::download($filename, "text/$how", $stuff);
+        if ($stuff) {
+            $mime = ($how == 'json') ? 'application/json' : "text/$how";
+            Http::download($filename, $mime, $stuff);
+        }
 
         return false;
     }
@@ -744,8 +746,8 @@ class JsonResultsExporter extends ResultSetExporter {
     function dump() {
         require_once(INCLUDE_DIR.'class.json.php');
         $rows = array();
-        while ($row=$this->nextArray()) {
-            $rows[] = $row;
+        while ($row=$this->next()) {
+            $rows[] = array_combine($this->getHeaders(), $row);
         }
         echo JsonDataEncoder::encode($rows);
     }

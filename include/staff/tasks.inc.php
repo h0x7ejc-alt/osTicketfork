@@ -452,9 +452,15 @@ if ($thisstaff->hasPerm(Task::PERM_DELETE, false)) {
         echo '<div>&nbsp;'.__('Page').':'.$pageNav->getPageLinks().'&nbsp;';
         echo sprintf('<a class="export-csv no-pjax" href="?%s">%s</a>',
                 Http::build_query(array(
-                        'a' => 'export', 'h' => $hash,
+                        'a' => 'export', 'h' => $hash, 'export_format' => 'csv',
                         'status' => $_REQUEST['status'])),
-                __('Export'));
+                __('Export CSV'));
+        echo '&nbsp;&nbsp;';
+        echo sprintf('<a class="export-json no-pjax" href="?%s">%s</a>',
+                Http::build_query(array(
+                        'a' => 'export', 'h' => $hash, 'export_format' => 'json',
+                        'status' => $_REQUEST['status'])),
+                __('Export JSON'));
         echo '&nbsp;<i class="help-tip icon-question-sign" href="#export"></i></div>';
     } ?>
     </form>

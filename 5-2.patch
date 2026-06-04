@@ -1,0 +1,66 @@
+diff --git a/include/class.export.php b/include/class.export.php
+index 504f5867..6e0ca4fd 100644
+--- a/include/class.export.php
++++ b/include/class.export.php
+@@ -171,8 +171,10 @@ class Export {
+         self::dumpTasks($sql, $how);
+         $stuff = ob_get_contents();
+         ob_end_clean();
+-        if ($stuff)
+-            Http::download($filename, "text/$how", $stuff);
++        if ($stuff) {
++            $mime = ($how == 'json') ? 'application/json' : "text/$how";
++            Http::download($filename, $mime, $stuff);
++        }
+ 
+         return false;
+     }
+@@ -744,8 +746,8 @@ class JsonResultsExporter extends ResultSetExporter {
+     function dump() {
+         require_once(INCLUDE_DIR.'class.json.php');
+         $rows = array();
+-        while ($row=$this->nextArray()) {
+-            $rows[] = $row;
++        while ($row=$this->next()) {
++            $rows[] = array_combine($this->getHeaders(), $row);
+         }
+         echo JsonDataEncoder::encode($rows);
+     }
+diff --git a/include/staff/tasks.inc.php b/include/staff/tasks.inc.php
+index 052b7055..62e13e9c 100644
+--- a/include/staff/tasks.inc.php
++++ b/include/staff/tasks.inc.php
+@@ -452,9 +452,15 @@ if ($thisstaff->hasPerm(Task::PERM_DELETE, false)) {
+         echo '<div>&nbsp;'.__('Page').':'.$pageNav->getPageLinks().'&nbsp;';
+         echo sprintf('<a class="export-csv no-pjax" href="?%s">%s</a>',
+                 Http::build_query(array(
+-                        'a' => 'export', 'h' => $hash,
++                        'a' => 'export', 'h' => $hash, 'export_format' => 'csv',
+                         'status' => $_REQUEST['status'])),
+-                __('Export'));
++                __('Export CSV'));
++        echo '&nbsp;&nbsp;';
++        echo sprintf('<a class="export-json no-pjax" href="?%s">%s</a>',
++                Http::build_query(array(
++                        'a' => 'export', 'h' => $hash, 'export_format' => 'json',
++                        'status' => $_REQUEST['status'])),
++                __('Export JSON'));
+         echo '&nbsp;<i class="help-tip icon-question-sign" href="#export"></i></div>';
+     } ?>
+     </form>
+diff --git a/scp/tasks.php b/scp/tasks.php
+index 06c38cc5..7aa2a693 100644
+--- a/scp/tasks.php
++++ b/scp/tasks.php
+@@ -232,9 +232,10 @@ if($task) {
+         $inc = 'task-open.inc.php';
+     elseif($_REQUEST['a'] == 'export') {
+         $ts = date('Ymd');
++        $format = (isset($_REQUEST['export_format']) && $_REQUEST['export_format'] == 'json') ? 'json' : 'csv';
+         if (!($query=$_SESSION[':Q:tasks']))
+             $errors['err'] = __('Query token not found');
+-        elseif (!Export::saveTasks($query, "tasks-$ts.csv", 'csv'))
++        elseif (!Export::saveTasks($query, "tasks-$ts.$format", $format))
+             $errors['err'] = __('Unable to dump query results.')
+                 .' '.__('Internal error occurred');
+     }
