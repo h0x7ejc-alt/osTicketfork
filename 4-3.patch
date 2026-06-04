@@ -1,0 +1,65 @@
+diff --git a/include/cli/modules/diag.php b/include/cli/modules/diag.php
+new file mode 100644
+index 00000000..9a321192
+--- /dev/null
++++ b/include/cli/modules/diag.php
+@@ -0,0 +1,58 @@
++<?php
++
++class DiagManager extends Module {
++    var $prologue = 'CLI diag manager for osTicket';
++
++    var $arguments = array(
++        'action' => array(
++            'help' => 'Action to be performed',
++            'options' => array(
++                'emails' => 'Show enabled mailbox account fetch configuration summary',
++            ),
++        ),
++    );
++
++    function run($args, $options) {
++        Bootstrap::connect();
++        $ost = osTicket::start();
++
++        switch (strtolower($args[0])) {
++        case 'emails':
++            require_once(INCLUDE_DIR . 'class.email.php');
++            $this->showEmailFetchSummary();
++            break;
++        default:
++            $this->stderr->write('Unknown action!');
++        }
++    }
++
++    function showEmailFetchSummary() {
++        $accounts = MailBoxAccount::objects()->filter(array('active' => 1));
++
++        if ($accounts->count() == 0) {
++            $this->stdout->write("No active mailbox accounts found.\n");
++            return;
++        }
++
++        $header = sprintf("%-35s %-20s %-20s %10s %10s\n",
++            'Email Address', 'Fetch Folder', 'Archive Folder',
++            'Max Fetch', 'Can Delete');
++        $this->stdout->write($header);
++        $this->stdout->write(str_repeat('-', 95) . "\n");
++
++        foreach ($accounts as $account) {
++            $emailAddr = $account->getEmail()->getEmail();
++            $fetchFolder = $account->getFetchFolder() ?: 'INBOX';
++            $archiveFolder = $account->getArchiveFolder() ?: 'N/A';
++            $maxFetch = $account->getMaxFetch() ?: 30;
++            $canDelete = $account->canDeleteEmails() ? 'Yes' : 'No';
++
++            $this->stdout->write(sprintf("%-35s %-20s %-20s %10d %10s\n",
++                $emailAddr, $fetchFolder, $archiveFolder,
++                $maxFetch, $canDelete));
++        }
++    }
++}
++
++Module::register('diag', 'DiagManager');
++?>
+\ No newline at end of file
