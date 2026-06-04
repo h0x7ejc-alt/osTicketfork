@@ -44,7 +44,7 @@ if ($canned && !$canned->staffCanAccess($thisstaff)) {
 
 $canned_form = new SimpleForm(array(
     'attachments' => new FileUploadField(array('id'=>'attach',
-        'configuration'=>array('extensions'=>false,
+        'configuration'=>array('extensions'=>$cfg->getAllowedFileTypes(),
             'size'=>$cfg->getMaxFileSize())
    )),
 ));
@@ -57,6 +57,26 @@ if ($canned
 }
 
 if ($_POST) {
+    $attachField = $canned_form->getField('attachments');
+    $keepers = $attachField ? $attachField->getClean(false) : array();
+
+    if ($keepers && $cfg->getAllowedFileTypes()) {
+        $invalidFiles = array();
+        foreach ($keepers as $fid => $fname) {
+            $file = AttachmentFile::lookup($fid);
+            $ftype = $file ? $file->getType() : false;
+            if (!$attachField->isValidFileType($fname, $ftype)) {
+                $invalidFiles[] = Format::htmlchars($fname);
+            }
+        }
+        if ($invalidFiles) {
+            $errors['files'] = sprintf(
+                __('The following files have disallowed type: %s'),
+                implode(', ', $invalidFiles)
+            );
+        }
+    }
+
     switch(strtolower($_POST['do'])) {
         case 'update':
             if(!$canned) {
@@ -70,8 +90,7 @@ if ($_POST) {
 
                 //Delete removed attachments.
                 //XXX: files[] shouldn't be changed under any circumstances.
-                // Upload NEW attachments IF ANY - TODO: validate attachment types??
-                $keepers = $canned_form->getField('attachments')->getClean();
+                // Upload NEW attachments IF ANY
                 $canned->attachments->keepOnlyFileIds($keepers, false);
 
                 // Attach inline attachments from the editor
@@ -100,7 +119,6 @@ if ($_POST) {
                 Signal::send('object.created', $premade, $type);
                 $_REQUEST['a']=null;
                 //Upload attachments
-                $keepers = $canned_form->getField('attachments')->getClean();
                 if ($keepers)
                     $premade->attachments->upload($keepers);
 
