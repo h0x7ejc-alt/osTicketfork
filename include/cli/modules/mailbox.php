@@ -1,0 +1,67 @@
+<?php
+
+class MailboxManager extends Module {
+    var $prologue = 'Show enabled mailbox fetch configuration summary';
+
+    function formatRow($row, $widths) {
+        $columns = array();
+        foreach ($row as $idx => $value)
+            $columns[] = str_pad($value, $widths[$idx]);
+
+        return implode('  ', $columns) . "\n";
+    }
+
+    function run($args, $options) {
+        require_once INCLUDE_DIR.'class.email.php';
+
+        Bootstrap::connect();
+
+        $headers = array(
+            'Email Address',
+            'Fetch Folder',
+            'Archive Folder',
+            'Max Fetch',
+            'Delete Emails',
+        );
+        $widths = array_map('strlen', $headers);
+        $rows = array();
+
+        $mailboxes = MailBoxAccount::objects()
+            ->filter(array('active' => 1))
+            ->order_by('email__email');
+
+        foreach ($mailboxes as $mailbox) {
+            $email = $mailbox->getEmail();
+            $row = array(
+                $email ? $email->getEmail() : '-',
+                $mailbox->getFetchFolder() ?: '-',
+                $mailbox->getArchiveFolder() ?: '-',
+                (string) ($mailbox->getMaxFetch() ?: 30),
+                $mailbox->canDeleteEmails() ? 'Yes' : 'No',
+            );
+
+            foreach ($row as $idx => $value)
+                $widths[$idx] = max($widths[$idx], strlen($value));
+
+            $rows[] = $row;
+        }
+
+        if (!$rows) {
+            $this->stdout->write("No enabled mailbox accounts found\n");
+            return;
+        }
+
+        $separator = array();
+        foreach ($widths as $width)
+            $separator[] = str_repeat('-', $width);
+
+        $this->stdout->write($this->formatRow($headers, $widths));
+        $this->stdout->write($this->formatRow($separator, $widths));
+
+        foreach ($rows as $row)
+            $this->stdout->write($this->formatRow($row, $widths));
+    }
+}
+
+Module::register('mailbox', 'MailboxManager');
+?>
