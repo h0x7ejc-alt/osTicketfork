@@ -1,0 +1,58 @@
+diff --git a/scp/canned.php b/scp/canned.php
+index 20398104..8218af7b 100644
+--- a/scp/canned.php
++++ b/scp/canned.php
+@@ -44,7 +44,7 @@ if ($canned && !$canned->staffCanAccess($thisstaff)) {
+ 
+ $canned_form = new SimpleForm(array(
+     'attachments' => new FileUploadField(array('id'=>'attach',
+-        'configuration'=>array('extensions'=>false,
++        'configuration'=>array('extensions'=>$cfg->getAllowedFileTypes(),
+             'size'=>$cfg->getMaxFileSize())
+    )),
+ ));
+@@ -70,8 +70,22 @@ if ($_POST) {
+ 
+                 //Delete removed attachments.
+                 //XXX: files[] shouldn't be changed under any circumstances.
+-                // Upload NEW attachments IF ANY - TODO: validate attachment types??
++                // Upload NEW attachments IF ANY - validate attachment types
+                 $keepers = $canned_form->getField('attachments')->getClean();
++                if ($keepers) {
++                    $invalid = array();
++                    foreach ($keepers as $id => $name) {
++                        if (is_numeric($id) && ($F = AttachmentFile::lookup($id))
++                                && !$canned_form->getField('attachments')->isValidFileType($F->getName(), $F->getType())) {
++                            $invalid[] = $F->getName();
++                            unset($keepers[$id]);
++                        }
++                    }
++                    if ($invalid) {
++                        $canned_form->getField('attachments')->addError(
++                            sprintf('%s: %s', implode(', ', $invalid), __('File type is not allowed')));
++                    }
++                }
+                 $canned->attachments->keepOnlyFileIds($keepers, false);
+ 
+                 // Attach inline attachments from the editor
+@@ -101,6 +115,20 @@ if ($_POST) {
+                 $_REQUEST['a']=null;
+                 //Upload attachments
+                 $keepers = $canned_form->getField('attachments')->getClean();
++                if ($keepers) {
++                    $invalid = array();
++                    foreach ($keepers as $id => $name) {
++                        if (is_numeric($id) && ($F = AttachmentFile::lookup($id))
++                                && !$canned_form->getField('attachments')->isValidFileType($F->getName(), $F->getType())) {
++                            $invalid[] = $F->getName();
++                            unset($keepers[$id]);
++                        }
++                    }
++                    if ($invalid) {
++                        $canned_form->getField('attachments')->addError(
++                            sprintf('%s: %s', implode(', ', $invalid), __('File type is not allowed')));
++                    }
++                }
+                 if ($keepers)
+                     $premade->attachments->upload($keepers);
+ 
